@@ -1,0 +1,15 @@
+{
+  "zombie_project_days": 30,
+  "fake_progress_count": 3,
+  "sunk_channel_days": 60,
+  "overdue_acceptance_days": 0,
+  "sunk_channel_warning_days": 90,
+  "waiting_too_long_days": 0,
+  "today_followup_limit": 10,
+  "poc_overdue_days": 60,
+  "acceptance_overdue_days": 30,
+  "acceptance_plan_overdue_days": 180,
+  "no_activity_warning_days": 7,
+  "quote_no_progress_days": 90,
+  "updated_at": "2026-06-15T09:48:31.928363"
+}
