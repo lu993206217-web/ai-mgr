@@ -57,6 +57,14 @@ install -m 644 /opt/ai-mgr/app/deploy/native/nginx-ai-mgr.conf /etc/nginx/conf.d
 if [[ -f /etc/nginx/conf.d/default.conf ]]; then
   mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled
 fi
+# openEuler的Nginx软件包会把默认站点直接写在nginx.conf中。将它移到
+# 本机8080端口，避免与AI项目情报平台的80端口默认站点冲突。
+if grep -Eq '^[[:space:]]*listen[[:space:]]+80;' /etc/nginx/nginx.conf; then
+  sed -i 's/^[[:space:]]*listen[[:space:]]\+80;/        listen       127.0.0.1:8080;/' /etc/nginx/nginx.conf
+fi
+if grep -Eq '^[[:space:]]*listen[[:space:]]+\[::\]:80;' /etc/nginx/nginx.conf; then
+  sed -i 's/^[[:space:]]*listen[[:space:]]\+\[::\]:80;/        # IPv6 default site disabled; AI project listens on port 80./' /etc/nginx/nginx.conf
+fi
 setsebool -P httpd_can_network_connect 1
 semanage fcontext -a -t httpd_sys_content_t '/usr/share/nginx/html/ai-mgr(/.*)?' 2>/dev/null || semanage fcontext -m -t httpd_sys_content_t '/usr/share/nginx/html/ai-mgr(/.*)?'
 systemctl daemon-reload

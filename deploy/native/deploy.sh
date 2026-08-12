@@ -27,6 +27,7 @@ echo "[2/5] 初始化或升级SQLite表"
 set -a
 source "${ENV_FILE}"
 set +a
+cd "${APP_ROOT}/backend"
 runuser -u ai-mgr --preserve-environment -- /opt/ai-mgr/venv/bin/python "${APP_ROOT}/backend/run.py" create-tables
 
 echo "[3/5] 构建前端"
