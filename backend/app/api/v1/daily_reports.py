@@ -1,6 +1,8 @@
 """
 项目活动日报同步 API。
 """
+from __future__ import annotations
+
 from datetime import date, datetime
 from typing import Any, Optional
 from uuid import UUID
@@ -322,7 +324,7 @@ async def get_bindings(
     )
 
 
-@router.get("/projects/{project_id}/binding", response_model=Response[DailyReportBinding | None])
+@router.get("/projects/{project_id}/binding", response_model=Response[Optional[DailyReportBinding]])
 async def get_project_binding(
     project_id: UUID,
     db: Session = Depends(get_db),

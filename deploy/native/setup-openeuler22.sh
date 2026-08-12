@@ -36,7 +36,7 @@ install -d -o root -g ai-mgr -m 750 /etc/ai-mgr
 
 echo "[4/7] 获取代码"
 if [[ -d /opt/ai-mgr/app/.git ]]; then
-  git -C /opt/ai-mgr/app pull --ff-only
+  runuser -u ai-mgr -- git -C /opt/ai-mgr/app pull --ff-only
 else
   git clone https://github.com/lu993206217-web/ai-mgr.git /opt/ai-mgr/app
 fi

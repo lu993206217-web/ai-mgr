@@ -18,15 +18,16 @@ if grep -Eq '^(SECRET_KEY|INITIAL_ADMIN_PASSWORD)=replace-with-' "${ENV_FILE}"; 
   exit 1
 fi
 
+set -a
+source "${ENV_FILE}"
+set +a
+
 echo "[1/5] 安装后端依赖"
 python3 -m venv /opt/ai-mgr/venv
 /opt/ai-mgr/venv/bin/python -m pip install --upgrade pip wheel
 /opt/ai-mgr/venv/bin/pip install -r "${APP_ROOT}/backend/requirements.txt"
 
 echo "[2/5] 初始化或升级SQLite表"
-set -a
-source "${ENV_FILE}"
-set +a
 cd "${APP_ROOT}/backend"
 runuser -u ai-mgr --preserve-environment -- /opt/ai-mgr/venv/bin/python "${APP_ROOT}/backend/run.py" create-tables
 

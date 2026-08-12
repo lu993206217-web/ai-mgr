@@ -4,6 +4,8 @@
 管理概览、阶段分布、风险项目、国家分布、渠道贡献等分析接口。
 SQLite 兼容版本。
 """
+from __future__ import annotations
+
 from datetime import datetime, date, timedelta
 from email.utils import parseaddr
 import json

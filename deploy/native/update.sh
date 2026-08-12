@@ -7,5 +7,5 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 bash /opt/ai-mgr/app/deploy/backup.sh /opt/ai-mgr/backups
-git -C /opt/ai-mgr/app pull --ff-only
+runuser -u ai-mgr -- git -C /opt/ai-mgr/app pull --ff-only
 bash /opt/ai-mgr/app/deploy/native/deploy.sh

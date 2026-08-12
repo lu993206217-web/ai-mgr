@@ -1,6 +1,8 @@
 """海外管理绩效汇报 Schema。"""
+from __future__ import annotations
+
 from datetime import date, datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
@@ -13,7 +15,7 @@ class CriterionConfig(BaseModel):
     requirement: str
     evidence_requirements: list[str]
     enabled: bool = True
-    thresholds: dict[str, float | int]
+    thresholds: dict[str, Union[float, int]]
 
 
 class PerformanceConfigView(BaseModel):
