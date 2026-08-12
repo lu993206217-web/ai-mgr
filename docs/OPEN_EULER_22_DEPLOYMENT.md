@@ -1,33 +1,31 @@
-# AI项目情报平台：openEuler 22.03 部署手册
+# AI项目情报平台：openEuler 22.03 原生部署手册
 
 ## 1. 部署边界
 
 - GitHub只保存源代码、依赖锁定文件和部署模板。
 - SQLite、邮件原文、附件、邮箱第三方安全密码、DeepSeek Key、日报Key、消息渠道Token不进入GitHub。
+- 不使用容器：Nginx提供页面与反向代理，Python虚拟环境运行FastAPI，systemd负责开机启动和故障恢复。
 - 生产后端固定为单进程。原因是当前使用SQLite，且自动推进调度器位于后端进程内；多进程会造成重复拉取和并发写库。
-- 前端Nginx统一提供页面和反向代理，外部只需开放一个Web端口。
 
 ## 2. 服务器要求
 
 - openEuler 22.03 LTS/SP版本，x86_64或AArch64。
 - 建议至少2核CPU、4 GB内存、20 GB可用磁盘；若迁移邮件附件，应根据附件量扩大磁盘。
 - 服务器能访问GitHub、Python/Node容器镜像、DeepSeek、企业邮箱IMAP，以及局域网日报接口。
-- openEuler官方文档说明22.03提供Docker容器引擎，可通过`dnf/yum`安装Docker；本项目同时兼容`docker compose`和`docker-compose`。
+- root或具备sudo权限的部署账户。
 
 ## 3. 首次部署
 
 ```bash
-sudo mkdir -p /opt/ai-mgr
-sudo chown "$USER":"$USER" /opt/ai-mgr
-git clone https://github.com/lu993206217-web/ai-mgr.git /opt/ai-mgr/app
-cd /opt/ai-mgr/app
-sudo bash deploy/setup-openeuler22.sh
+git clone https://github.com/lu993206217-web/ai-mgr.git /tmp/ai-mgr-bootstrap
+cd /tmp/ai-mgr-bootstrap
+sudo bash deploy/native/setup-openeuler22.sh
 ```
 
 编辑生产配置：
 
 ```bash
-sudo vi deploy/.env.production
+sudo vi /etc/ai-mgr/ai-mgr.env
 ```
 
 必须修改：
@@ -42,7 +40,7 @@ sudo vi deploy/.env.production
 启动：
 
 ```bash
-sudo bash deploy/deploy.sh
+sudo bash /opt/ai-mgr/app/deploy/native/deploy.sh
 ```
 
 默认访问：`http://服务器IP/`。
@@ -79,10 +77,9 @@ sudo bash /opt/ai-mgr/app/deploy/deploy.sh
 ## 5. 验收清单
 
 ```bash
-cd /opt/ai-mgr/app
-docker ps
+systemctl status ai-mgr nginx
 curl -f http://127.0.0.1/health
-docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production logs --tail=100 backend
+journalctl -u ai-mgr --no-pager -n 100
 ```
 
 浏览器验收：
@@ -92,7 +89,7 @@ docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production lo
 3. 在邮件情报中测试IMAP/SMTP连接，手工同步一轮。
 4. 在日报导入中同步最近一天，确认原始数据先落库、低可信不自动导入。
 5. 在流程中心确认自动任务周期、运行记录和告警复核结果。
-6. 重启容器，确认SQLite数据、邮件原文和附件仍存在。
+6. 重启服务，确认SQLite数据、邮件原文和附件仍存在。
 
 ## 6. 更新与回滚
 
@@ -100,7 +97,7 @@ docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production lo
 
 ```bash
 cd /opt/ai-mgr/app
-sudo bash deploy/update.sh
+sudo bash /opt/ai-mgr/app/deploy/native/update.sh
 ```
 
 手工备份：
@@ -114,11 +111,10 @@ sudo bash deploy/backup.sh
 ## 7. 常用运维命令
 
 ```bash
-cd /opt/ai-mgr/app
-docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production ps
-docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production logs -f --tail=200
-docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production restart backend
-docker-compose -f deploy/docker-compose.yml --env-file deploy/.env.production down
+systemctl status ai-mgr nginx
+journalctl -u ai-mgr -f
+systemctl restart ai-mgr
+systemctl restart nginx
 ```
 
-若服务器使用新版Compose，将`docker-compose`替换为`docker compose`。
+旧的Docker模板继续保留用于其他环境，但本服务器不使用。

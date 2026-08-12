@@ -1,0 +1,25 @@
+[Unit]
+Description=AI Project Intelligence Platform Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ai-mgr
+Group=ai-mgr
+WorkingDirectory=/opt/ai-mgr/app/backend
+EnvironmentFile=/etc/ai-mgr/ai-mgr.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/ai-mgr/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/ai-mgr /var/log/ai-mgr
+
+[Install]
+WantedBy=multi-user.target

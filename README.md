@@ -24,10 +24,18 @@ npm run dev -- --host 0.0.0.0 --port 3001
 
 ## openEuler 22.03部署
 
-生产部署使用Docker Compose、Nginx、单进程FastAPI和持久化SQLite。完整步骤见：
+当前推荐原生部署：Nginx、Python虚拟环境、systemd、单进程FastAPI和持久化SQLite，不依赖容器。完整步骤见：
 
 - [openEuler 22.03部署手册](docs/OPEN_EULER_22_DEPLOYMENT.md)
 - [生产环境变量模板](deploy/.env.production.example)
+
+服务器初始化：
+
+```bash
+sudo bash deploy/native/setup-openeuler22.sh
+sudo vi /etc/ai-mgr/ai-mgr.env
+sudo bash deploy/native/deploy.sh
+```
 
 ## 数据安全
 
