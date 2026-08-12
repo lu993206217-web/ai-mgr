@@ -18,7 +18,7 @@ __pycache__/
 *.db
 *.sqlite
 # 运行期业务数据包含邮件原文、附件、SQLite 和本机密钥，绝不进入 Git
-backend/data/
+backend/data
 backend/backups/
 deploy/runtime/
 deploy/.env.production
