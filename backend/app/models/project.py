@@ -62,6 +62,11 @@ class Project(Base):
     activities = relationship("ActivityLog", back_populates="project", cascade="all, delete-orphan")
     quotes = relationship("Quote", back_populates="project", cascade="all, delete-orphan")
     warnings = relationship("WarningInstance", back_populates="project", cascade="all, delete-orphan")
+    files = relationship("ProjectFile", back_populates="project", cascade="all, delete-orphan")
+    state_events = relationship("ProjectStateEvent", back_populates="project", cascade="all, delete-orphan")
+    intelligence_snapshots = relationship(
+        "ProjectIntelligenceSnapshot", back_populates="project", cascade="all, delete-orphan"
+    )
     
     def __repr__(self) -> str:
         return f"<Project {self.project_name}>"
@@ -69,17 +74,22 @@ class Project(Base):
     @property
     def health_status_computed(self) -> HealthStatus:
         """根据最后活动时间和阻塞状态计算健康度"""
+        def comparable_now(value: datetime) -> datetime:
+            # SQLite 返回的是无时区时间；不要用带时区时间直接相减，否则会
+            # 触发异常并让上层悄悄回落到数据库里的默认“健康”。
+            if value.tzinfo is None:
+                return datetime.now()
+            return datetime.now(value.tzinfo)
+
         # 新建项目（创建时间在7天内）且没有活动时，默认健康状态为健康
         if not self.last_activity_at:
-            from datetime import timezone
-            now = datetime.now(timezone.utc)
+            now = comparable_now(self.created_at)
             days_since_created = (now - self.created_at).days
             if days_since_created <= 7:
                 return HealthStatus.HEALTHY
             return HealthStatus.SERIOUS_RISK
         
-        from datetime import timezone
-        now = datetime.now(timezone.utc)
+        now = comparable_now(self.last_activity_at)
         days_since_activity = (now - self.last_activity_at).days
         
         # 检查是否有阻塞活动（处理可能的异常）

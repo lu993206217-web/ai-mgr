@@ -30,6 +30,17 @@
   --danger-color: #ef4444;
   --info-color: #6366f1;
 
+  --communication-customer-text: #fef3c7;
+  --communication-customer-bg: rgba(245, 158, 11, 0.18);
+  --communication-customer-border: rgba(245, 158, 11, 0.4);
+  --communication-our-text: #dbeafe;
+  --communication-our-bg: rgba(59, 130, 246, 0.18);
+  --communication-our-border: rgba(59, 130, 246, 0.4);
+  --communication-internal-text: #e2e8f0;
+  --communication-internal-bg: rgba(100, 116, 139, 0.22);
+  --communication-internal-border: rgba(148, 163, 184, 0.35);
+  --warning-text-strong: #fbbf24;
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.4);
@@ -86,6 +97,17 @@
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
   --info-color: #6366f1;
+
+  --communication-customer-text: #92400e;
+  --communication-customer-bg: #fffbeb;
+  --communication-customer-border: #fbbf24;
+  --communication-our-text: #1d4ed8;
+  --communication-our-bg: #eff6ff;
+  --communication-our-border: #93c5fd;
+  --communication-internal-text: #475569;
+  --communication-internal-bg: #f8fafc;
+  --communication-internal-border: #cbd5e1;
+  --warning-text-strong: #b45309;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);

@@ -45,6 +45,11 @@ export function getSunkChannels() {
   return request.get(`/dashboard/sunk-channels`)
 }
 
+// 战术层 - 需要管理介入的项目矩阵
+export function getAttentionProjects() {
+  return request.get(`/dashboard/attention-projects`)
+}
+
 // 执行层 - 今日需跟进项目
 export function getTodayFollowups() {
   return request.get(`/dashboard/today-followups`)
@@ -53,4 +58,16 @@ export function getTodayFollowups() {
 // 执行层 - 等待客户反馈超时
 export function getWaitingTooLong() {
   return request.get(`/dashboard/waiting-too-long`)
+}
+
+export function getIntelligenceTrends(days: number = 30) {
+  return request.get(`/dashboard/intelligence-trends`, { params: { days } })
+}
+
+export function getWaitingEmailThreads() {
+  return request.get(`/dashboard/waiting-email-threads`)
+}
+
+export function getManagementInsights() {
+  return request.get(`/dashboard/management-insights`)
 }

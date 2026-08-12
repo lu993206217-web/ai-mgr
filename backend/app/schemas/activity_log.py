@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.activity_presentation import EmailActivityDetail
+
 
 # ============ 基础 Schema ============
 class ActivityLogBase(BaseModel):
@@ -57,6 +59,9 @@ class ActivityLog(ActivityLogInDB):
     project_name: Optional[str] = None
     channel_name: Optional[str] = None
     owner_name: Optional[str] = None
+    display_title: Optional[str] = None
+    display_summary: Optional[str] = None
+    email_detail: Optional[EmailActivityDetail] = None
 
 
 # ============ 查询参数 Schema ============

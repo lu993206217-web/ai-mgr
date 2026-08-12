@@ -171,6 +171,17 @@
             <span class="config-unit">个</span>
             <p class="config-tip">避免列表过长影响阅读</p>
           </div>
+          <div class="config-item">
+            <label class="config-label">
+              客户邮件待回复天数
+              <el-tooltip content="内部发出的项目邮件超过此天数仍没有客户回复时，进入执行层待办" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </label>
+            <el-input-number v-model="form.email_waiting_reply_days" :min="1" :max="90" />
+            <span class="config-unit">天</span>
+            <p class="config-tip">需先配置并同步企业邮箱，系统按邮件线程判断</p>
+          </div>
         </div>
       </div>
 
@@ -246,6 +257,27 @@
         </div>
       </div>
 
+      <!-- 流程中心分级告警 -->
+      <div class="config-section">
+        <div class="section-header">
+          <div class="section-icon warning">🔄</div>
+          <div>
+            <h3 class="section-title">流程中心分级告警</h3>
+            <p class="section-desc">先提醒、再告警、最后升级；新邮件或日报形成有效推进后自动解除</p>
+          </div>
+        </div>
+        <div class="config-grid">
+          <div class="config-item"><label class="config-label">事项无推进：提醒</label><el-input-number v-model="form.workflow_no_progress_reminder_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">事项无推进：告警</label><el-input-number v-model="form.workflow_no_progress_warning_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">事项无推进：严重</label><el-input-number v-model="form.workflow_no_progress_escalation_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">等待外部：提醒</label><el-input-number v-model="form.workflow_external_wait_reminder_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">等待外部：告警</label><el-input-number v-model="form.workflow_external_wait_warning_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">等待外部：严重</label><el-input-number v-model="form.workflow_external_wait_escalation_days" :min="1" :max="365" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">截止日期告警宽限</label><el-input-number v-model="form.workflow_due_warning_grace_days" :min="0" :max="90" /><span class="config-unit">天</span></div>
+          <div class="config-item"><label class="config-label">截止日期严重升级</label><el-input-number v-model="form.workflow_due_escalation_days" :min="1" :max="90" /><span class="config-unit">天</span></div>
+        </div>
+      </div>
+
       <!-- 判断逻辑说明 -->
       <div class="config-section">
         <div class="section-header">
@@ -314,18 +346,27 @@ const saving = ref(false)
 const activeNames = ref(['strategic', 'tactical', 'execution', 'warning'])
 
 const form = reactive<DashboardThresholds>({
-  zombie_project_days: 30,
-  fake_progress_count: 3,
-  sunk_channel_days: 60,
+  zombie_project_days: 45,
+  fake_progress_count: 4,
+  sunk_channel_days: 90,
   overdue_acceptance_days: 0,
-  sunk_channel_warning_days: 90,
-  waiting_too_long_days: 0,
+  sunk_channel_warning_days: 120,
+  waiting_too_long_days: 7,
+  email_waiting_reply_days: 7,
   today_followup_limit: 10,
-  poc_overdue_days: 60,
-  acceptance_overdue_days: 30,
-  acceptance_plan_overdue_days: 180,
-  no_activity_warning_days: 7,
-  quote_no_progress_days: 90,
+  poc_overdue_days: 90,
+  acceptance_overdue_days: 60,
+  acceptance_plan_overdue_days: 210,
+  no_activity_warning_days: 30,
+  quote_no_progress_days: 120,
+  workflow_no_progress_reminder_days: 14,
+  workflow_no_progress_warning_days: 30,
+  workflow_no_progress_escalation_days: 45,
+  workflow_external_wait_reminder_days: 7,
+  workflow_external_wait_warning_days: 14,
+  workflow_external_wait_escalation_days: 30,
+  workflow_due_warning_grace_days: 3,
+  workflow_due_escalation_days: 7,
 })
 
 async function loadThresholds() {

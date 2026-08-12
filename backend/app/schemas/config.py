@@ -14,26 +14,36 @@ from pydantic import BaseModel, Field
 class DashboardThresholds(BaseModel):
     """驾驶舱阈值配置"""
     # 战略层
-    zombie_project_days: int = Field(30, ge=1, description="僵尸项目天数阈值（多少天无活动算僵尸项目）")
-    fake_progress_count: int = Field(3, ge=2, description="假性推进连续活动次数")
-    sunk_channel_days: int = Field(60, ge=1, description="沉没渠道天数阈值（多少天无联系算沉没）")
+    zombie_project_days: int = Field(45, ge=1, description="僵尸项目天数阈值（多少天无活动算僵尸项目）")
+    fake_progress_count: int = Field(4, ge=2, description="假性推进连续活动次数")
+    sunk_channel_days: int = Field(90, ge=1, description="沉没渠道天数阈值（多少天无联系算沉没）")
 
     # 战术层
     overdue_acceptance_days: int = Field(0, ge=0, description="验收超时起始天数（已超过计划验收日期）")
-    sunk_channel_warning_days: int = Field(90, ge=1, description="战术层渠道沉没预警天数")
+    sunk_channel_warning_days: int = Field(120, ge=1, description="战术层渠道沉没预警天数")
 
     # 执行层
-    waiting_too_long_days: int = Field(0, ge=0, description="等待客户反馈超时起始天数")
+    waiting_too_long_days: int = Field(7, ge=0, description="等待客户反馈超时起始天数")
+    email_waiting_reply_days: int = Field(7, ge=1, description="邮件发出后等待客户回复天数")
     today_followup_limit: int = Field(10, ge=1, le=50, description="今日跟进项目数限制")
 
     # 阶段流转阈值
-    poc_overdue_days: int = Field(60, ge=1, description="POC阶段超时天数")
-    acceptance_overdue_days: int = Field(30, ge=1, description="验收阶段超时天数")
-    acceptance_plan_overdue_days: int = Field(180, ge=1, description="计划验收超期天数（生成长期未验收预警）")
+    poc_overdue_days: int = Field(90, ge=1, description="POC阶段超时天数")
+    acceptance_overdue_days: int = Field(60, ge=1, description="验收阶段超时天数")
+    acceptance_plan_overdue_days: int = Field(210, ge=1, description="计划验收超期天数（生成长期未验收预警）")
 
     # 预警冷却期
-    no_activity_warning_days: int = Field(7, ge=1, description="无活动预警天数")
-    quote_no_progress_days: int = Field(90, ge=1, description="报价后无进展预警天数")
+    no_activity_warning_days: int = Field(30, ge=1, description="无活动预警天数")
+    quote_no_progress_days: int = Field(120, ge=1, description="报价后无进展预警天数")
+
+    workflow_no_progress_reminder_days: int = Field(14, ge=1)
+    workflow_no_progress_warning_days: int = Field(30, ge=1)
+    workflow_no_progress_escalation_days: int = Field(45, ge=1)
+    workflow_external_wait_reminder_days: int = Field(7, ge=1)
+    workflow_external_wait_warning_days: int = Field(14, ge=1)
+    workflow_external_wait_escalation_days: int = Field(30, ge=1)
+    workflow_due_warning_grace_days: int = Field(3, ge=0)
+    workflow_due_escalation_days: int = Field(7, ge=1)
 
     updated_at: Optional[datetime] = None
 
@@ -46,12 +56,21 @@ class DashboardThresholdsUpdate(BaseModel):
     overdue_acceptance_days: Optional[int] = Field(None, ge=0)
     sunk_channel_warning_days: Optional[int] = Field(None, ge=1)
     waiting_too_long_days: Optional[int] = Field(None, ge=0)
+    email_waiting_reply_days: Optional[int] = Field(None, ge=1)
     today_followup_limit: Optional[int] = Field(None, ge=1, le=50)
     poc_overdue_days: Optional[int] = Field(None, ge=1)
     acceptance_overdue_days: Optional[int] = Field(None, ge=1)
     acceptance_plan_overdue_days: Optional[int] = Field(None, ge=1)
     no_activity_warning_days: Optional[int] = Field(None, ge=1)
     quote_no_progress_days: Optional[int] = Field(None, ge=1)
+    workflow_no_progress_reminder_days: Optional[int] = Field(None, ge=1)
+    workflow_no_progress_warning_days: Optional[int] = Field(None, ge=1)
+    workflow_no_progress_escalation_days: Optional[int] = Field(None, ge=1)
+    workflow_external_wait_reminder_days: Optional[int] = Field(None, ge=1)
+    workflow_external_wait_warning_days: Optional[int] = Field(None, ge=1)
+    workflow_external_wait_escalation_days: Optional[int] = Field(None, ge=1)
+    workflow_due_warning_grace_days: Optional[int] = Field(None, ge=0)
+    workflow_due_escalation_days: Optional[int] = Field(None, ge=1)
 
 
 # ============ 预警规则配置 Schema ============

@@ -20,6 +20,8 @@ from app.schemas.activity_log import (
     ActivityLogQueryParams,
 )
 from app.schemas.common import Response, PaginatedResponse
+from app.services.activity_presentation import enrich_activity_presentation
+from app.services.workflow_center import ingest_activity_evidence
 
 router = APIRouter(tags=["活动日志"])
 
@@ -68,6 +70,7 @@ async def get_activities(
         act_dict.project_name = act.project.project_name if act.project else None
         act_dict.channel_name = act.channel.channel_name if act.channel else None
         act_dict.owner_name = act.owner.full_name if act.owner else None
+        enrich_activity_presentation(db, act, act_dict)
         activity_list.append(act_dict)
 
     return Response.success(
@@ -91,6 +94,7 @@ async def get_activity(
     act_dict.project_name = activity.project.project_name if activity.project else None
     act_dict.channel_name = activity.channel.channel_name if activity.channel else None
     act_dict.owner_name = activity.owner.full_name if activity.owner else None
+    enrich_activity_presentation(db, activity, act_dict)
 
     return Response.success(data=act_dict, message="获取成功")
 
@@ -111,6 +115,8 @@ async def create_activity(
             project.last_activity_at = activity.occurred_at
             project.updated_at = datetime.now()
 
+    db.flush()
+    ingest_activity_evidence(db, activity, confidence=1.0, reason="人工活动日志")
     db.commit()
     db.refresh(activity)
 
@@ -134,6 +140,8 @@ async def update_activity(
         setattr(activity, field, value)
 
     activity.updated_at = datetime.now()
+    db.flush()
+    ingest_activity_evidence(db, activity, confidence=1.0, reason="人工更新活动日志")
     db.commit()
     db.refresh(activity)
 

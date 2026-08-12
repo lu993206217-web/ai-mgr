@@ -3,7 +3,7 @@
 
 驾驶舱 API 的 Pydantic 模型。
 """
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Dict, Any
 from uuid import UUID
 
@@ -23,6 +23,18 @@ class DashboardSummary(BaseModel):
     zombie_projects: int = Field(..., description="僵尸项目数（30天无活动）")
     fake_progress_projects: int = Field(..., description="假性推进项目数")
     inactive_channels: int = Field(..., description="沉睡渠道数（60天无活动）")
+
+    # 数据可信度与新鲜度。驾驶舱必须让用户知道当前数字覆盖了多少原始情报。
+    latest_activity_at: Optional[datetime] = None
+    latest_ingestion_at: Optional[datetime] = None
+    latest_daily_sync_at: Optional[datetime] = None
+    latest_daily_sync_status: Optional[str] = None
+    activity_covered_projects: int = 0
+    activity_coverage_percentage: float = 0
+    daily_report_raw_count: int = 0
+    daily_report_imported_count: int = 0
+    daily_report_pending_match_count: int = 0
+    email_message_count: int = 0
 
 
 # ============ 阶段分布 Schema ============
@@ -44,10 +56,11 @@ class RiskProjectItem(BaseModel):
     """风险项目项 Schema"""
     project_id: UUID
     project_name: str
+    country: Optional[str] = None
     current_stage: str
     blocker: str = Field(..., description="卡点描述")
     days_stuck: int = Field(..., description="停留天数")
-    owner_name: str
+    owner_name: Optional[str] = None
     risk_level: str
 
 
@@ -104,7 +117,7 @@ class OverdueProjectItem(BaseModel):
     current_stage: str
     days_overdue: int = Field(..., description="超时天数")
     owner_name: Optional[str] = None
-    planned_acceptance: Optional[datetime] = None
+    planned_acceptance: Optional[date] = None
 
 
 # ============ 战术层 - 渠道沉没预警 Schema ============
@@ -115,7 +128,24 @@ class SunkChannelItem(BaseModel):
     country: Optional[str] = None
     days_since_last_contact: int = Field(..., description="失联天数")
     total_projects: int = Field(..., description="历史项目数")
-    last_contact_date: Optional[datetime] = None
+    last_contact_date: Optional[date] = None
+
+
+class AttentionProjectItem(BaseModel):
+    """战术层需要介入的项目及其证据。"""
+    project_id: UUID
+    project_name: str
+    country: Optional[str] = None
+    current_stage: str
+    health_status: str
+    stage_days: int = 0
+    inactivity_days: int = 0
+    attention_reason: str
+    latest_activity_at: Optional[datetime] = None
+    latest_activity_source: Optional[str] = None
+    next_action: Optional[str] = None
+    next_action_deadline: Optional[date] = None
+    owner_name: Optional[str] = None
 
 
 # ============ 执行层 - 今日需跟进项目 Schema ============
@@ -135,3 +165,36 @@ class WaitingTooLongItem(BaseModel):
     project_name: str
     next_action: str = Field(..., description="等待事项")
     days_waiting: int = Field(..., description="等待天数")
+
+
+class IntelligenceTrendItem(BaseModel):
+    snapshot_date: date
+    project_count: int
+    covered_project_count: int
+    risk_project_count: int
+    average_risk_score: float
+    activity_count_7d: int
+    active_warning_count: int
+
+
+class WaitingEmailThreadItem(BaseModel):
+    email_id: UUID
+    thread_id: Optional[str] = None
+    project_id: UUID
+    project_name: str
+    subject: str
+    sender: str
+    sent_at: datetime
+    waiting_days: int
+    recipients: List[str] = Field(default_factory=list)
+
+
+class ManagementInsightItem(BaseModel):
+    insight_id: str
+    priority: str
+    title: str
+    reason: str
+    recommendation: str
+    project_id: Optional[UUID] = None
+    evidence_source: str
+    evidence_at: Optional[datetime] = None

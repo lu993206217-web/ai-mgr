@@ -66,6 +66,7 @@ class NextAction(str, Enum):
     WAITING_INTERNAL = "等待内部审批"
     WAITING_CONTRACT = "等待合同签订"
     WAITING_ACCEPTANCE = "等待验收"
+    OUR_ACTION = "我方处理"
     OTHER = "其他"
 
 

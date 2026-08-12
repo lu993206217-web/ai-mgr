@@ -15,14 +15,22 @@ from app.db.session import get_db
 from app.models.user import User as UserModel
 from app.models.project import Project as ProjectModel
 from app.models.activity_log import ActivityLog as ActivityLogModel
+from app.models.project_file import ProjectFile as ProjectFileModel
+from app.models.project_intelligence import ProjectStateEvent as ProjectStateEventModel
+from app.services.project_intelligence import record_state_event
+from app.services.activity_presentation import enrich_activity_presentation
 from app.schemas.project import (
     Project,
     ProjectCreate,
     ProjectUpdate,
     ProjectQueryParams,
     StageTransitionRequest,
+    ProjectStateEventItem,
     ActivityLog,
     ActivityLogCreate,
+    ProjectFile,
+    ProjectFileCreate,
+    ProjectFileUpdate,
 )
 from app.schemas.common import Response, PaginatedResponse
 
@@ -176,6 +184,15 @@ async def create_project(
     )
 
     db.add(project)
+    db.flush()
+    record_state_event(
+        db, project, "stage_baseline", None, project.current_stage, current_user.id,
+        note="项目创建时阶段", source="project_create", occurred_at=project.created_at or datetime.now(),
+    )
+    record_state_event(
+        db, project, "status_baseline", None, project.status, current_user.id,
+        note="项目创建时状态", source="project_create", occurred_at=project.created_at or datetime.now(),
+    )
     db.commit()
     db.refresh(project)
 
@@ -195,9 +212,23 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
 
+    old_stage = project.current_stage
+    old_status = project.status
     update_data = project_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(project, field, value)
+
+    if "current_stage" in update_data and project.current_stage != old_stage:
+        project.stage_entered_at = datetime.now()
+        record_state_event(
+            db, project, "stage_change", old_stage, project.current_stage, current_user.id,
+            note="通过项目编辑修改阶段", source="project_update",
+        )
+    if "status" in update_data and project.status != old_status:
+        record_state_event(
+            db, project, "status_change", old_status, project.status, current_user.id,
+            note="通过项目编辑修改状态", source="project_update",
+        )
 
     project.updated_by = current_user.id
     project.updated_at = datetime.now()
@@ -221,15 +252,40 @@ async def transition_stage(
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
 
+    old_stage = project.current_stage
+    if str(getattr(old_stage, "value", old_stage)) == transition_data.target_stage:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="目标阶段与当前阶段相同，无需流转",
+        )
     project.current_stage = transition_data.target_stage
     project.stage_entered_at = datetime.now()
     project.updated_by = current_user.id
     project.updated_at = datetime.now()
+    record_state_event(
+        db, project, "stage_change", old_stage, project.current_stage, current_user.id,
+        note=transition_data.transition_note, source="stage_transition",
+    )
 
     db.commit()
     db.refresh(project)
 
     return Response.success(data=Project.model_validate(project), message="阶段流转成功")
+
+
+@router.get("/{project_id}/state-events", response_model=Response[list[ProjectStateEventItem]])
+async def get_project_state_events(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """获取项目阶段与状态的不可覆盖历史。"""
+    if not db.query(ProjectModel.id).filter(ProjectModel.id == project_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+    events = db.query(ProjectStateEventModel).filter(
+        ProjectStateEventModel.project_id == project_id
+    ).order_by(ProjectStateEventModel.occurred_at.desc()).all()
+    return Response.success(data=events, message="获取成功")
 
 
 # ============ 删除项目接口 ============
@@ -289,6 +345,7 @@ async def get_project_activities(
     for activity in activities:
         activity_dict = ActivityLog.model_validate(activity)
         activity_dict.owner_name = activity.owner.full_name if activity.owner else None
+        enrich_activity_presentation(db, activity, activity_dict)
         activity_list.append(activity_dict)
     
     return Response.success(
@@ -323,6 +380,10 @@ async def create_project_activity(
     )
 
     db.add(activity)
+    db.flush()
+    from app.services.workflow_center import ingest_activity_evidence
+
+    ingest_activity_evidence(db, activity, confidence=1.0, reason="项目详情人工活动")
     db.commit()
     db.refresh(activity)
 
@@ -335,3 +396,129 @@ async def create_project_activity(
     activity_dict.owner_name = activity.owner.full_name if activity.owner else None
 
     return Response.success(data=activity_dict, message="创建成功")
+
+
+# ============ 项目文件接口 ============
+@router.get("/{project_id}/files", response_model=Response[PaginatedResponse[ProjectFile]])
+async def get_project_files(
+    project_id: UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    file_category: Optional[str] = Query(None, description="文件分类筛选"),
+    keyword: Optional[str] = Query(None, description="文件名称关键字"),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """获取项目文件列表"""
+    project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+
+    query = db.query(ProjectFileModel).filter(ProjectFileModel.project_id == project_id)
+    if file_category:
+        query = query.filter(ProjectFileModel.file_category == file_category)
+    if keyword:
+        query = query.filter(ProjectFileModel.file_name.ilike(f"%{keyword}%"))
+
+    total = query.count()
+    offset_val = (page - 1) * page_size
+    files = query.order_by(ProjectFileModel.created_at.desc()).offset(offset_val).limit(page_size).all()
+
+    file_list = []
+    for item in files:
+        file_dict = ProjectFile.model_validate(item)
+        file_dict.created_by_name = item.creator.full_name if item.creator else None
+        file_list.append(file_dict)
+
+    return Response.success(
+        data=PaginatedResponse.create(
+            items=file_list,
+            total=total,
+            page=page,
+            page_size=page_size,
+        ),
+        message="获取成功",
+    )
+
+
+@router.post("/{project_id}/files", response_model=Response[ProjectFile])
+async def create_project_file(
+    project_id: UUID,
+    file_data: ProjectFileCreate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """创建项目文件记录"""
+    project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目不存在")
+
+    create_data = file_data.model_dump()
+    project_file = ProjectFileModel(
+        **create_data,
+        project_id=project_id,
+        created_by=current_user.id,
+        updated_by=current_user.id,
+    )
+    db.add(project_file)
+    db.commit()
+    db.refresh(project_file)
+
+    file_dict = ProjectFile.model_validate(project_file)
+    file_dict.created_by_name = current_user.full_name
+
+    return Response.success(data=file_dict, message="创建成功")
+
+
+@router.put("/{project_id}/files/{file_id}", response_model=Response[ProjectFile])
+async def update_project_file(
+    project_id: UUID,
+    file_id: UUID,
+    file_data: ProjectFileUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """更新项目文件记录"""
+    project_file = (
+        db.query(ProjectFileModel)
+        .filter(ProjectFileModel.project_id == project_id, ProjectFileModel.id == file_id)
+        .first()
+    )
+    if not project_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目文件不存在")
+
+    update_data = file_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(project_file, field, value)
+
+    project_file.updated_by = current_user.id
+    project_file.updated_at = datetime.now()
+    db.commit()
+    db.refresh(project_file)
+
+    file_dict = ProjectFile.model_validate(project_file)
+    file_dict.created_by_name = project_file.creator.full_name if project_file.creator else None
+
+    return Response.success(data=file_dict, message="更新成功")
+
+
+@router.delete("/{project_id}/files/{file_id}", response_model=Response)
+async def delete_project_file(
+    project_id: UUID,
+    file_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """删除项目文件记录"""
+    project_file = (
+        db.query(ProjectFileModel)
+        .filter(ProjectFileModel.project_id == project_id, ProjectFileModel.id == file_id)
+        .first()
+    )
+    if not project_file:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="项目文件不存在")
+
+    db.delete(project_file)
+    db.commit()
+
+    return Response.success(message="删除成功")

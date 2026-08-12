@@ -8,12 +8,21 @@ export interface DashboardThresholds {
   overdue_acceptance_days: number
   sunk_channel_warning_days: number
   waiting_too_long_days: number
+  email_waiting_reply_days: number
   today_followup_limit: number
   poc_overdue_days: number
   acceptance_overdue_days: number
   acceptance_plan_overdue_days: number
   no_activity_warning_days: number
   quote_no_progress_days: number
+  workflow_no_progress_reminder_days: number
+  workflow_no_progress_warning_days: number
+  workflow_no_progress_escalation_days: number
+  workflow_external_wait_reminder_days: number
+  workflow_external_wait_warning_days: number
+  workflow_external_wait_escalation_days: number
+  workflow_due_warning_grace_days: number
+  workflow_due_escalation_days: number
   updated_at?: string
 }
 

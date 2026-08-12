@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    INITIAL_ADMIN_USERNAME: str = "admin"
+    INITIAL_ADMIN_PASSWORD: str = "admin123"
     
     # 数据库配置
     DB_TYPE: str = "sqlite"  # sqlite 或 postgres
@@ -74,11 +76,52 @@ class Settings(BaseSettings):
     DEEPSEEK_MAX_TOKENS: int = 4096
     DEEPSEEK_TEMPERATURE: float = 0.1
     DEEPSEEK_TIMEOUT: int = 30
+    DEEPSEEK_VERIFY_SSL: bool = True
+    DAILY_REPORT_AI_ENABLED: bool = True
+    DAILY_REPORT_AI_AUTO_MATCH_SCORE: float = 0.92
+    EMAIL_AI_ENABLED: bool = True
+    EMAIL_AI_AUTO_MATCH_SCORE: float = 0.92
     
     # 钉钉集成配置
     DINGTALK_APP_KEY: Optional[str] = None
     DINGTALK_APP_SECRET: Optional[str] = None
     DINGTALK_AGENT_ID: Optional[str] = None
+
+    # 项目活动日报同步配置
+    DAILY_REPORT_SYNC_ENABLED: bool = True
+    DAILY_REPORT_SYNC_HOUR: int = 9
+    DAILY_REPORT_SYNC_MINUTE: int = 45
+    DAILY_REPORT_SYNC_LOOKBACK_DAYS: int = 3
+    DAILY_REPORT_SYNC_AUTO_MATCH_SCORE: float = 0.86
+    DAILY_REPORT_API_BASE_URL: str = "https://192.168.1.180"
+    DAILY_REPORT_API_KEY: Optional[str] = None
+    DAILY_REPORT_API_KEY_HEADER: str = "X-NB-API-Key"
+    DAILY_REPORT_API_VERIFY_SSL: bool = False
+    DAILY_REPORT_API_ALLOW_HTTP_FALLBACK: bool = True
+    DAILY_REPORT_API_TIMEOUT: int = 30
+
+    # Gmail 邮件情报接入（只使用 OAuth，不保存邮箱密码）
+    GMAIL_CLIENT_ID: Optional[str] = None
+    GMAIL_CLIENT_SECRET: Optional[str] = None
+    GMAIL_REDIRECT_URI: str = "http://127.0.0.1:8001/api/v1/email-intelligence/oauth/callback"
+    GMAIL_ACCOUNT_EMAIL: Optional[str] = None
+    GMAIL_SYNC_ENABLED: bool = False
+
+    # 钉钉企业邮箱（阿里企业邮）IMAP / SMTP 接入
+    DINGTALK_MAIL_ENABLED: bool = False
+    DINGTALK_MAIL_ACCOUNT_EMAIL: Optional[str] = None
+    DINGTALK_MAIL_PASSWORD: Optional[str] = None
+    DINGTALK_MAIL_IMAP_HOST: str = "imap.qiye.aliyun.com"
+    DINGTALK_MAIL_IMAP_PORT: int = 993
+    DINGTALK_MAIL_IMAP_SSL: bool = True
+    DINGTALK_MAIL_SMTP_HOST: str = "smtp.qiye.aliyun.com"
+    DINGTALK_MAIL_SMTP_PORT: int = 465
+    DINGTALK_MAIL_SMTP_SSL: bool = True
+    DINGTALK_MAIL_FOLDER: str = "INBOX"
+    DINGTALK_MAIL_SENT_FOLDER: Optional[str] = None
+    DINGTALK_MAIL_TIMEOUT: int = 30
+    DINGTALK_MAIL_SYNC_LIMIT: int = 50
+    DINGTALK_MAIL_SYNC_INTERVAL_MINUTES: int = 5
     
     # 日志配置
     LOG_LEVEL: str = "INFO"
@@ -91,6 +134,9 @@ class Settings(BaseSettings):
     # 预警通知配置
     ENABLE_WARNING_NOTIFICATION: bool = True
     WARNING_CHECK_HOUR: int = 9
+    WARNING_CHECK_MINUTE: int = 55
+    INTELLIGENCE_SNAPSHOT_HOUR: int = 10
+    INTELLIGENCE_SNAPSHOT_MINUTE: int = 0
 
 
 # 全局配置实例

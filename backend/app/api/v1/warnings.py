@@ -26,6 +26,8 @@ from app.schemas.warning import (
     WarningInstanceQueryParams,
 )
 from app.schemas.common import Response, PaginatedResponse
+from app.api.v1.config import get_thresholds
+from app.models.enums import NextAction, ProjectStage, ProjectStatus, WarningStatus
 
 router = APIRouter(tags=["预警管理"])
 
@@ -190,25 +192,43 @@ async def handle_warning_instance(
     return Response.success(data=instance, message="处理成功")
 
 
+@router.post("/instances/{instance_id}/resolve", response_model=Response[WarningInstance])
+async def resolve_warning_instance(
+    instance_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+) -> Any:
+    """兼容页面快捷处理入口。"""
+    instance = db.query(WarningInstanceModel).filter(WarningInstanceModel.id == instance_id).first()
+    if not instance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="预警实例不存在")
+    instance.status = WarningStatus.HANDLED
+    instance.handled_by = current_user.id
+    instance.handled_at = datetime.now()
+    instance.handle_note = "人工标记已处理"
+    db.commit()
+    db.refresh(instance)
+    return Response.success(data=instance, message="处理成功")
+
+
 @router.post("/check", response_model=Response)
 async def trigger_warning_check(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user),
 ) -> Any:
     """手动触发预警检查"""
+    total_instances = run_warning_check(db)
+    return Response.success(data={"instances_created": total_instances}, message=f"预警检查完成，生成 {total_instances} 个预警实例")
+
+
+def run_warning_check(db: Session) -> int:
+    """执行一次预警检查，供手工接口和后台定时任务共用。"""
     now = datetime.now()
     rules = db.query(WarningRuleModel).filter(WarningRuleModel.is_active == True).all()
 
+    _resolve_legacy_warnings_that_no_longer_apply(db, now)
     total_instances = 0
     for rule in rules:
-        recent_instance = db.query(WarningInstanceModel).filter(
-            WarningInstanceModel.rule_id == rule.id,
-            WarningInstanceModel.created_at >= now - timedelta(days=rule.cooldown_days)
-        ).first()
-
-        if recent_instance:
-            continue
-
         check_fn = {
             "R001": _check_r001, "R002": _check_r002, "R003": _check_r003,
             "R004": _check_r004, "R005": _check_r005, "R006": _check_r006, "R007": _check_r007,
@@ -219,17 +239,75 @@ async def trigger_warning_check(
             db.add_all(instances)
             total_instances += len(instances)
 
-    db.commit()
+    from app.services.workflow_center import evaluate_workflow_alerts
 
-    return Response.success(data={"instances_created": total_instances}, message=f"预警检查完成，生成 {total_instances} 个预警实例")
+    workflow_result = evaluate_workflow_alerts(db, now)
+    total_instances += workflow_result["created"]
+    db.commit()
+    return total_instances
+
+
+def _resolve_legacy_warnings_that_no_longer_apply(db: Session, now: datetime) -> None:
+    """阈值延长或项目有新进展后，自动解除已经不成立的旧预警。"""
+    thresholds = get_thresholds()
+    active_instances = db.query(WarningInstanceModel).filter(
+        WarningInstanceModel.status == WarningStatus.ACTIVE
+    ).all()
+    for instance in active_instances:
+        code = instance.rule.rule_code if instance.rule else ""
+        project = instance.project
+        applies = True
+        if code == "R001" and project:
+            reference = project.last_activity_at or project.created_at
+            applies = project.status == ProjectStatus.IN_PROGRESS and (now - reference).days > thresholds["no_activity_warning_days"]
+        elif code == "R002" and project:
+            applies = (
+                project.status == ProjectStatus.IN_PROGRESS
+                and project.current_stage == ProjectStage.ACCEPTANCE
+                and bool(project.stage_entered_at)
+                and (now - project.stage_entered_at).days > thresholds["acceptance_overdue_days"]
+            )
+        elif code == "R003" and project:
+            applies = (
+                project.status == ProjectStatus.IN_PROGRESS
+                and project.current_stage == ProjectStage.POC
+                and bool(project.stage_entered_at)
+                and (now - project.stage_entered_at).days > thresholds["poc_overdue_days"]
+            )
+        elif code == "R005" and instance.channel:
+            from app.api.v1.dashboard import _effective_channel_contact
+
+            applies = (now.date() - _effective_channel_contact(db, instance.channel)).days > thresholds["sunk_channel_warning_days"]
+        elif code == "R006" and project:
+            count = thresholds["fake_progress_count"]
+            recent = db.query(ActivityLogModel).filter(
+                ActivityLogModel.project_id == project.id
+            ).order_by(ActivityLogModel.occurred_at.desc()).limit(count).all()
+            applies = len(recent) == count and all(
+                item.next_action == NextAction.WAITING_CUSTOMER for item in recent
+            )
+        elif code == "R007" and project:
+            applies = (
+                project.status == ProjectStatus.IN_PROGRESS
+                and bool(project.planned_acceptance)
+                and (now.date() - project.planned_acceptance).days > thresholds["acceptance_plan_overdue_days"]
+            )
+        if not applies:
+            instance.status = WarningStatus.HANDLED
+            instance.handled_at = now
+            instance.handle_note = "系统根据新进展或延长后的阈值自动解除"
 
 
 def _check_r001(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R001: 无跟进预警"""
-    seven_days_ago = now - timedelta(days=7)
+    threshold = get_thresholds()["no_activity_warning_days"]
+    cutoff = now - timedelta(days=threshold)
     projects = db.query(ProjectModel).filter(
-        ProjectModel.status == "进行中",
-        or_(ProjectModel.last_activity_at == None, ProjectModel.last_activity_at < seven_days_ago)
+        ProjectModel.status == ProjectStatus.IN_PROGRESS,
+        or_(
+            ProjectModel.last_activity_at < cutoff,
+            and_(ProjectModel.last_activity_at == None, ProjectModel.created_at < cutoff),
+        )
     ).all()
 
     instances = []
@@ -238,15 +316,15 @@ def _check_r001(db: Session, rule: WarningRuleModel, now: datetime) -> list:
             WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.project_id == project.id, WarningInstanceModel.status == "活跃"
         ).first()
         if not existing:
-            days = (now - project.last_activity_at).days if project.last_activity_at else 999
+            days = (now - (project.last_activity_at or project.created_at)).days
             instances.append(WarningInstanceModel(rule_id=rule.id, project_id=project.id, severity=rule.severity, status="活跃", message=f"项目「{project.project_name}」已{days}天无活动"))
     return instances
 
 
 def _check_r002(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R002: 验收超时预警"""
-    thirty_days_ago = now - timedelta(days=30)
-    projects = db.query(ProjectModel).filter(ProjectModel.status == "进行中", ProjectModel.current_stage == "验收", ProjectModel.stage_entered_at < thirty_days_ago).all()
+    cutoff = now - timedelta(days=get_thresholds()["acceptance_overdue_days"])
+    projects = db.query(ProjectModel).filter(ProjectModel.status == ProjectStatus.IN_PROGRESS, ProjectModel.current_stage == ProjectStage.ACCEPTANCE, ProjectModel.stage_entered_at < cutoff).all()
     instances = []
     for project in projects:
         existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.project_id == project.id, WarningInstanceModel.status == "活跃").first()
@@ -258,8 +336,8 @@ def _check_r002(db: Session, rule: WarningRuleModel, now: datetime) -> list:
 
 def _check_r003(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R003: POC超时预警"""
-    sixty_days_ago = now - timedelta(days=60)
-    projects = db.query(ProjectModel).filter(ProjectModel.status == "进行中", ProjectModel.current_stage == "POC", ProjectModel.stage_entered_at < sixty_days_ago).all()
+    cutoff = now - timedelta(days=get_thresholds()["poc_overdue_days"])
+    projects = db.query(ProjectModel).filter(ProjectModel.status == ProjectStatus.IN_PROGRESS, ProjectModel.current_stage == ProjectStage.POC, ProjectModel.stage_entered_at < cutoff).all()
     instances = []
     for project in projects:
         existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.project_id == project.id, WarningInstanceModel.status == "活跃").first()
@@ -271,8 +349,8 @@ def _check_r003(db: Session, rule: WarningRuleModel, now: datetime) -> list:
 
 def _check_r004(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R004: 报价后无进展预警"""
-    ninety_days_ago = now - timedelta(days=90)
-    quotes = db.query(QuoteModel).filter(QuoteModel.quote_date < ninety_days_ago, QuoteModel.project_id == None).all()
+    cutoff = now - timedelta(days=get_thresholds()["quote_no_progress_days"])
+    quotes = db.query(QuoteModel).filter(QuoteModel.quote_date < cutoff, QuoteModel.project_id == None).all()
     instances = []
     for quote in quotes:
         existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.message.like(f"%{quote.id}%")).first()
@@ -284,40 +362,45 @@ def _check_r004(db: Session, rule: WarningRuleModel, now: datetime) -> list:
 
 def _check_r005(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R005: 渠道沉没预警"""
-    sixty_days_ago = (now - timedelta(days=60)).date()
-    channels = db.query(ChannelModel).filter(ChannelModel.cooperation_status == "活跃", or_(ChannelModel.last_contact_date == None, ChannelModel.last_contact_date < sixty_days_ago)).all()
+    from app.api.v1.dashboard import _effective_channel_contact
+    threshold = get_thresholds()["sunk_channel_days"]
+    channels = db.query(ChannelModel).all()
     instances = []
     for channel in channels:
+        effective_contact = _effective_channel_contact(db, channel)
+        days = (now.date() - effective_contact).days
+        if days <= threshold:
+            continue
         existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.channel_id == channel.id, WarningInstanceModel.status == "活跃").first()
         if not existing:
-            days = (now.date() - channel.last_contact_date).days if channel.last_contact_date else 999
             instances.append(WarningInstanceModel(rule_id=rule.id, channel_id=channel.id, severity=rule.severity, status="活跃", message=f"渠道「{channel.channel_name}」已{days}天无活动"))
     return instances
 
 
 def _check_r006(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R006: 假性推进预警"""
-    projects = db.query(ProjectModel).filter(ProjectModel.status == "进行中").all()
+    count = get_thresholds()["fake_progress_count"]
+    projects = db.query(ProjectModel).filter(ProjectModel.status == ProjectStatus.IN_PROGRESS).all()
     instances = []
     for project in projects:
-        recent_activities = db.query(ActivityLogModel).filter(ActivityLogModel.project_id == project.id).order_by(ActivityLogModel.occurred_at.desc()).limit(3).all()
-        if len(recent_activities) < 3:
+        recent_activities = db.query(ActivityLogModel).filter(ActivityLogModel.project_id == project.id).order_by(ActivityLogModel.occurred_at.desc()).limit(count).all()
+        if len(recent_activities) < count:
             continue
-        if all(a.next_action == "等待客户反馈" for a in recent_activities):
+        if all(a.next_action == NextAction.WAITING_CUSTOMER for a in recent_activities):
             existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.project_id == project.id, WarningInstanceModel.status == "活跃").first()
             if not existing:
-                instances.append(WarningInstanceModel(rule_id=rule.id, project_id=project.id, severity=rule.severity, status="活跃", message=f"项目「{project.project_name}」连续3次活动为等待客户反馈，疑似假性推进"))
+                instances.append(WarningInstanceModel(rule_id=rule.id, project_id=project.id, severity=rule.severity, status="活跃", message=f"项目「{project.project_name}」连续{count}次活动为等待客户反馈，疑似假性推进"))
     return instances
 
 
 def _check_r007(db: Session, rule: WarningRuleModel, now: datetime) -> list:
     """R007: 项目长期未验收预警"""
-    one_eighty_days_ago = now - timedelta(days=180)
-    projects = db.query(ProjectModel).filter(ProjectModel.status == "进行中", ProjectModel.planned_acceptance != None, ProjectModel.planned_acceptance < one_eighty_days_ago).all()
+    cutoff = now.date() - timedelta(days=get_thresholds()["acceptance_plan_overdue_days"])
+    projects = db.query(ProjectModel).filter(ProjectModel.status == ProjectStatus.IN_PROGRESS, ProjectModel.planned_acceptance != None, ProjectModel.planned_acceptance < cutoff).all()
     instances = []
     for project in projects:
         existing = db.query(WarningInstanceModel).filter(WarningInstanceModel.rule_id == rule.id, WarningInstanceModel.project_id == project.id, WarningInstanceModel.status == "活跃").first()
         if not existing:
-            days = (now - project.planned_acceptance).days if project.planned_acceptance else 0
+            days = (now.date() - project.planned_acceptance).days if project.planned_acceptance else 0
             instances.append(WarningInstanceModel(rule_id=rule.id, project_id=project.id, severity=rule.severity, status="活跃", message=f"项目「{project.project_name}」计划验收时间已过期{days}天，仍未验收"))
     return instances

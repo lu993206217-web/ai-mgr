@@ -29,18 +29,27 @@ CONFIG_FILE = CONFIG_DIR / "thresholds.json"
 
 # 默认阈值配置
 DEFAULT_THRESHOLDS = {
-    "zombie_project_days": 30,
-    "fake_progress_count": 3,
-    "sunk_channel_days": 60,
+    "zombie_project_days": 45,
+    "fake_progress_count": 4,
+    "sunk_channel_days": 90,
     "overdue_acceptance_days": 0,
-    "sunk_channel_warning_days": 90,
-    "waiting_too_long_days": 0,
+    "sunk_channel_warning_days": 120,
+    "waiting_too_long_days": 7,
+    "email_waiting_reply_days": 7,
     "today_followup_limit": 10,
-    "poc_overdue_days": 60,
-    "acceptance_overdue_days": 30,
-    "acceptance_plan_overdue_days": 180,
-    "no_activity_warning_days": 7,
-    "quote_no_progress_days": 90,
+    "poc_overdue_days": 90,
+    "acceptance_overdue_days": 60,
+    "acceptance_plan_overdue_days": 210,
+    "no_activity_warning_days": 30,
+    "quote_no_progress_days": 120,
+    "workflow_no_progress_reminder_days": 14,
+    "workflow_no_progress_warning_days": 30,
+    "workflow_no_progress_escalation_days": 45,
+    "workflow_external_wait_reminder_days": 7,
+    "workflow_external_wait_warning_days": 14,
+    "workflow_external_wait_escalation_days": 30,
+    "workflow_due_warning_grace_days": 3,
+    "workflow_due_escalation_days": 7,
 }
 
 

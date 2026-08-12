@@ -50,18 +50,21 @@ def init_database():
     from app.core.security import get_password_hash
     from app.models.user import User
     from app.models.warning import WarningRule
+    from app.models.enums import WarningSeverity
     from datetime import datetime
     
     db = SessionLocal()
     try:
         # 创建管理员用户
-        admin = db.query(User).filter(User.username == "admin").first()
+        admin = db.query(User).filter(User.username == settings.INITIAL_ADMIN_USERNAME).first()
         if not admin:
+            if not settings.DEBUG and settings.INITIAL_ADMIN_PASSWORD == "admin123":
+                raise RuntimeError("生产环境必须配置非默认 INITIAL_ADMIN_PASSWORD")
             admin = User(
-                username="admin",
+                username=settings.INITIAL_ADMIN_USERNAME,
                 email="admin@ai-control-tower.com",
                 full_name="系统管理员",
-                hashed_password=get_password_hash("admin123"),
+                hashed_password=get_password_hash(settings.INITIAL_ADMIN_PASSWORD),
                 role="管理员",
                 is_active=True,
                 created_at=datetime.utcnow(),
@@ -69,11 +72,11 @@ def init_database():
                 last_login_at=None,
             )
             db.add(admin)
-            print("  ✓ 创建管理员用户: admin / admin123")
+            print(f"  ✓ 创建管理员用户: {settings.INITIAL_ADMIN_USERNAME}")
         
         # 创建测试用户
         test_user = db.query(User).filter(User.username == "test").first()
-        if not test_user:
+        if settings.DEBUG and not test_user:
             test_user = User(
                 username="test",
                 email="test@ai-control-tower.com",
@@ -87,6 +90,8 @@ def init_database():
             )
             db.add(test_user)
             print("  ✓ 创建测试用户: test / test123")
+
+        db.flush()
         
         # 创建内置预警规则
         rules = [
@@ -95,7 +100,7 @@ def init_database():
                 "rule_code": "R001",
                 "description": "项目超过7天无活动记录",
                 "conditions": {"field": "last_activity_at", "operator": "<", "value": "7d"},
-                "severity": "关注",
+                "severity": WarningSeverity.ATTENTION,
                 "notify_targets": ["project_owner", "pmo"],
                 "notify_channels": ["system"],
                 "cooldown_days": 7,
@@ -105,7 +110,7 @@ def init_database():
                 "rule_code": "R002",
                 "description": "项目在验收阶段停留超过30天",
                 "conditions": {"field": "current_stage", "operator": "=", "value": "验收", "duration": ">30d"},
-                "severity": "风险",
+                "severity": WarningSeverity.WARNING,
                 "notify_targets": ["project_owner", "pmo"],
                 "notify_channels": ["system"],
                 "cooldown_days": 7,
@@ -115,7 +120,7 @@ def init_database():
                 "rule_code": "R003",
                 "description": "项目在POC阶段停留超过60天",
                 "conditions": {"field": "current_stage", "operator": "=", "value": "POC", "duration": ">60d"},
-                "severity": "风险",
+                "severity": WarningSeverity.WARNING,
                 "notify_targets": ["project_owner"],
                 "notify_channels": ["system"],
                 "cooldown_days": 14,
@@ -125,7 +130,7 @@ def init_database():
                 "rule_code": "R004",
                 "description": "报价超过90天未形成项目",
                 "conditions": {"field": "quote_date", "operator": "<", "value": "90d", "no_project": True},
-                "severity": "关注",
+                "severity": WarningSeverity.ATTENTION,
                 "notify_targets": ["project_owner"],
                 "notify_channels": ["system"],
                 "cooldown_days": 30,
@@ -135,7 +140,7 @@ def init_database():
                 "rule_code": "R005",
                 "description": "渠道超过60天无活动记录",
                 "conditions": {"field": "last_contact_date", "operator": "<", "value": "60d"},
-                "severity": "关注",
+                "severity": WarningSeverity.ATTENTION,
                 "notify_targets": ["channel_owner"],
                 "notify_channels": ["system"],
                 "cooldown_days": 30,
@@ -145,7 +150,7 @@ def init_database():
                 "rule_code": "R006",
                 "description": "连续3次活动内容为等待客户反馈",
                 "conditions": {"field": "next_action", "operator": "=", "value": "等待客户反馈", "consecutive": 3},
-                "severity": "风险",
+                "severity": WarningSeverity.WARNING,
                 "notify_targets": ["project_owner", "pmo"],
                 "notify_channels": ["system"],
                 "cooldown_days": 7,
@@ -155,7 +160,7 @@ def init_database():
                 "rule_code": "R007",
                 "description": "项目已签约但超过180天未验收",
                 "conditions": {"field": "planned_acceptance", "operator": "<", "value": "180d", "status": "进行中"},
-                "severity": "严重",
+                "severity": WarningSeverity.CRITICAL,
                 "notify_targets": ["project_owner", "pmo", "ceo"],
                 "notify_channels": ["system", "dingtalk"],
                 "cooldown_days": 3,

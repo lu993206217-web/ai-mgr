@@ -59,6 +59,36 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '预警中心' },
       },
       {
+        path: 'workflow-center',
+        name: 'WorkflowCenter',
+        component: () => import('@/views/WorkflowCenter.vue'),
+        meta: { title: '流程中心' },
+      },
+      {
+        path: 'daily-reports',
+        name: 'DailyReportImport',
+        component: () => import('@/views/DailyReportImport.vue'),
+        meta: { title: '日报导入处理' },
+      },
+      {
+        path: 'email-intelligence',
+        name: 'EmailIntelligence',
+        component: () => import('@/views/EmailIntelligence.vue'),
+        meta: { title: 'AI邮件情报' },
+      },
+      {
+        path: 'message-linkage',
+        name: 'MessageLinkage',
+        component: () => import('@/views/MessageLinkage.vue'),
+        meta: { title: '消息联动' },
+      },
+      {
+        path: 'overseas-performance',
+        name: 'OverseasPerformance',
+        component: () => import('@/views/OverseasPerformance.vue'),
+        meta: { title: '海外绩效汇报' },
+      },
+      {
         path: 'users',
         name: 'UserList',
         component: () => import('@/views/UserList.vue'),

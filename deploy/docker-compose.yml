@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: ai-mgr-backend:latest
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      DB_TYPE: sqlite
+      DEBUG: "False"
+      HOST: 0.0.0.0
+      PORT: 8001
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - /opt/ai-mgr/runtime/data:/app/data
+      - /opt/ai-mgr/runtime/uploads:/app/uploads
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ai-mgr
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: ai-mgr-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT:-80}:80"
+    networks:
+      - ai-mgr
+
+networks:
+  ai-mgr:
+    driver: bridge

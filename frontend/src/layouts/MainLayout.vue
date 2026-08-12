@@ -137,6 +137,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { ElMessage } from 'element-plus'
 import { getWarningInstances } from '@/api/warning'
+import { getWorkflowAlerts } from '@/api/workflow'
 import {
   HomeFilled,
   FolderOpened,
@@ -144,6 +145,11 @@ import {
   User as UserIcon,
   Document,
   WarningFilled,
+  DataAnalysis,
+  Message,
+  Promotion,
+  TrendCharts,
+  List,
   Setting,
   Tools,
   Fold,
@@ -171,10 +177,19 @@ const unreadCount = ref(0)
 
 async function loadNotifications() {
   try {
-    // 获取活跃状态的预警实例
-    const res = await getWarningInstances({ status: '活跃', page: 1, page_size: 5 })
-    notifications.value = res.data?.items || []
-    unreadCount.value = res.data?.total || 0
+    const [workflowRes, legacyRes] = await Promise.all([
+      getWorkflowAlerts({ status: '活跃', page: 1, page_size: 5 }),
+      getWarningInstances({ status: '活跃', page: 1, page_size: 5 }),
+    ])
+    const workflowItems = (workflowRes.data?.items || []).map((item: any) => ({
+      ...item,
+      severity: item.level,
+      rule_name: item.alert_type,
+      created_at: item.last_evaluated_at,
+      is_workflow_alert: true,
+    }))
+    notifications.value = [...workflowItems, ...(legacyRes.data?.items || [])].slice(0, 8)
+    unreadCount.value = (workflowRes.data?.total || 0) + (legacyRes.data?.total || 0)
   } catch (error) {
     // 静默失败，不打扰用户
     console.warn('加载通知失败', error)
@@ -190,7 +205,9 @@ function handleNotificationClick() {
 
 function handleNotificationItemClick(item: any) {
   notificationDialogVisible.value = false
-  if (item.project_id) {
+  if (item.workflow_item_id) {
+    router.push({ path: '/workflow-center', query: { item: item.workflow_item_id } })
+  } else if (item.project_id) {
     router.push(`/projects/${item.project_id}`)
   } else {
     router.push('/warnings')
@@ -230,7 +247,12 @@ const menuItems = [
   { path: '/channels', title: '渠道管理', icon: Connection },
   { path: '/customers', title: '客户管理', icon: UserIcon },
   { path: '/quotes', title: '报价管理', icon: Document },
+  { path: '/workflow-center', title: '流程中心', icon: List },
   { path: '/warnings', title: '预警中心', icon: WarningFilled },
+  { path: '/daily-reports', title: '日报导入', icon: DataAnalysis },
+  { path: '/email-intelligence', title: '邮件情报', icon: Message },
+  { path: '/message-linkage', title: '消息联动', icon: Promotion },
+  { path: '/overseas-performance', title: '海外绩效', icon: TrendCharts },
   { path: '/users', title: '用户管理', icon: Setting },
   { path: '/config', title: '系统设置', icon: Tools },
 ]
@@ -261,9 +283,11 @@ watch(
 <style scoped>
 .main-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
+  overflow: hidden;
 }
 
 /* ============ 侧边栏样式 ============ */
@@ -345,6 +369,8 @@ watch(
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -539,8 +565,32 @@ watch(
 
 .page-content {
   flex: 1;
+  min-height: 0;
   padding: 24px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-primary);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #60a5fa rgba(15, 23, 42, 0.45);
+}
+
+.page-content::-webkit-scrollbar {
+  width: 12px;
+}
+
+.page-content::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: 999px;
+}
+
+.page-content::-webkit-scrollbar-thumb {
+  background: #60a5fa;
+  border-radius: 999px;
+  border: 3px solid rgba(15, 23, 42, 0.45);
+}
+
+.page-content::-webkit-scrollbar-thumb:hover {
+  background: #93c5fd;
 }
 </style>
